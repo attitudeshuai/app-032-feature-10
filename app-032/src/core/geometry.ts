@@ -45,13 +45,17 @@ export interface Geometry {
   kTop: number
   /** 下收口占高比例 */
   kBot: number
-  /** 分层截面（长度 = 层数 + 1，自底向上） */
+  /** 分层截面（自底向上，每两层之间仅在该层有高度时新增一段；index 保留对应层号） */
   sections: Section[]
+  /** 成段层的层下标（高度缺失的老档不完整层不在其中），与裁片 layerIndex 同号 */
+  activeLayers: number[]
   /** 正视轮廓（密采样，用于绘图） */
   profile: Point2[]
 }
 
 export interface SegmentInfo {
+  /** 对应灯样 layers 中的层下标（与裁片 layerIndex / layerColors 同号；跳过缺高度的不完整层） */
+  layerIndex: number
   index: number
   y0Mm: number
   y1Mm: number
@@ -236,18 +240,22 @@ export function buildGeometry(l: Lantern): Geometry {
 
   const profile = buildProfilePoints(l, h, maxR, mouthR, baseR, kTop, kBot)
 
+  const activeLayers: number[] = []
   const sections: Section[] = []
   let y = 0
   sections.push({ index: 0, yMm: 0, radiusMm: radiusAtY(profile, 0) })
   l.layers.forEach((ly, i) => {
-    y += Math.max(0, ly.heightMm)
+    const dh = Math.max(0, ly.heightMm)
+    if (dh <= 0) return // 老档缺分层高度：不造这段轮廓（构件表/裁片页少这一段，需人工补）
+    activeLayers.push(i)
+    y += dh
     sections.push({ index: i + 1, yMm: y, radiusMm: radiusAtY(profile, y) })
   })
 
-  return { kind: l.kind, heightMm: h, maxR, mouthR, baseR, n, polygon, kTop, kBot, sections, profile }
+  return { kind: l.kind, heightMm: h, maxR, mouthR, baseR, n, polygon, kTop, kBot, sections, activeLayers, profile }
 }
 
-/** 分段明细：竖篾折线长、梯形面高、上下边长 */
+/** 分段明细：竖篾折线长、梯形面高、上下边长（跳过缺高度的不完整层） */
 export function segmentInfos(g: Geometry): SegmentInfo[] {
   const out: SegmentInfo[] = []
   for (let i = 0; i < g.sections.length - 1; i++) {
@@ -263,6 +271,7 @@ export function segmentInfos(g: Geometry): SegmentInfo[] {
       ? Math.sqrt(Math.max(0, slant * slant - halfDelta * halfDelta))
       : slant
     out.push({
+      layerIndex: b.index - 1,
       index: i,
       y0Mm: a.yMm,
       y1Mm: b.yMm,

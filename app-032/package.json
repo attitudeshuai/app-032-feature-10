@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "test:legacy": "esbuild scripts/legacy-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/legacy-check.mjs && node node_modules/.tmp/legacy-check.mjs"
   },
   "dependencies": {
     "vue": "^3.5.13",

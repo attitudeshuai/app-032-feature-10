@@ -18,6 +18,63 @@ export interface LayerSpec {
   diameterMm: number
 }
 
+/** 老灯样补齐的两条路（取舍必须挑一条并认下代价） */
+export type LegacyRoute = 'preset' | 'default'
+
+/** 导出台账上的单子/图纸种类（三份导出单子 + 1:1 图纸） */
+export type ExportKind = 'members' | 'panels' | 'materials' | 'drawing'
+
+/** 一次写进存档的导出记录（已发出去的单子/图纸据此作废判定） */
+export interface ExportLedgerEntry {
+  kind: ExportKind
+  at: string
+  /** 导出时灯样的内容签名（改一处再导出即与旧单子对不上） */
+  signature: string
+}
+
+/** 一次补齐的审计记录（写在灯样上，列清这次补了哪几项） */
+export interface LegacyRevision {
+  /** 第几版补齐（同一批重复确认不许写成两版；换一条路重补即升一版） */
+  revision: number
+  route: LegacyRoute
+  /** 对得上的预设 id（route=preset 时有值） */
+  presetId?: string
+  /** 逐项补值清单 */
+  items: LegacyFillItem[]
+  /** 补值来源里多出的/不认识的字段原样留下，仅登记键名 */
+  unknownFieldsKept: string[]
+  complete: boolean
+  /** 不完整层（按 1 起始的层号）：default 路顶值后仍可能少一段轮廓的层 */
+  incompleteLayers: number[]
+  warnings: string[]
+  confirmedAt: string
+  /** 该版确认后已据其导出过的单子（换路即作废） */
+  exports: ExportLedgerEntry[]
+  /** 该版是否已被换路重补作废 */
+  voidedAt?: string
+  /** 作废原因（写明已发出的单子/图纸与已裁料如何处理） */
+  voidReason?: string
+}
+
+/** 单个补值项：缺哪一项、顶成什么值、取自哪条预设/默认 */
+export interface LegacyFillItem {
+  /** 字段路径，如 baseDiameterMm / layerColors[2] / layers[1].diameterMm / divisions */
+  path: string
+  /** 人类可读字段名 */
+  label: string
+  /** 补后的值（展示用，必要时同时给 mm 与整数 cm） */
+  value: number | string
+  /** 取值来源，如「预设 六角宫灯 params.baseDiameterMm」「默认值目录 baseDiameterMm→mouthDiameterMm」 */
+  source: string
+  /** 该补值是否让构件表/裁片页可能少一段轮廓、需人工复核 */
+  manual?: boolean
+}
+
+/** 老灯样补齐元数据（挂在灯样上；id/createdAt 永不在读入时重生成） */
+export interface LegacyMeta {
+  revisions: LegacyRevision[]
+}
+
 export interface Lantern {
   id: string
   kind: LanternKind
@@ -43,7 +100,7 @@ export interface Lantern {
   /** 葫芦/花瓶形贝塞尔控制点（归一化：x 为半径插值比例，y 为肩部区间比例） */
   ctrl1: Point2
   ctrl2: Point2
-  /** 旋转体母线等分数（默认 24，可调） */
+  /** 旋转体母线等分数（默认 24，可调；老档缺了按默认值补） */
   divisions: number
   /** 蒙面类型 */
   covering: Covering
@@ -65,6 +122,12 @@ export interface Lantern {
   overlapMm: number
   createdAt: string
   updatedAt: string
+  /** 数据模型版本（老档没有，读入时不补写、确认写回时才带 v2） */
+  schemaVersion?: number
+  /** 老灯样补齐审计（只有被补齐过的灯样才有） */
+  legacy?: LegacyMeta
+  /** 允许保留任何多出的旧字段，读出来再存回去不丢 */
+  [extra: string]: unknown
 }
 
 export interface FrameMember {

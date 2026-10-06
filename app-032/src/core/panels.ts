@@ -112,7 +112,8 @@ export function buildPanels(l: Lantern): PanelResult {
   const segs = segmentInfos(g)
   const divisions = Math.max(3, Math.round(l.divisions))
 
-  segs.forEach((sg, i) => {
+  for (const sg of segs) {
+    const i = sg.layerIndex // 保留对应灯样层号（缺高度的不完整层已在几何中跳过）
     const color = l.layerColors[i] || l.color
     const isPolygon = g.polygon
     const rawBottom = isPolygon ? sg.edgeBottomMm : (TAU * sg.r0Mm) / divisions
@@ -137,9 +138,9 @@ export function buildPanels(l: Lantern): PanelResult {
       color,
       note: isPolygon
         ? `上下边各加 ${s}mm 缝份，${g.n} 块围成一圈`
-        : `按 ${divisions} 等分近似展开，每块上下边各加 ${s}mm 缝份`
+        : `按 ${divisions} 等分近似展开（容差 ±${'3.00%'}，见自检），每块上下边各加 ${s}mm 缝份`
     })
-  })
+  }
 
   // 顶盖 / 底盖
   const topR = g.sections[g.sections.length - 1].radiusMm

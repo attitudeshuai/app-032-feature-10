@@ -3,12 +3,15 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PanelDiagram from '../components/PanelDiagram.vue'
 import ChecksPanel from '../components/ChecksPanel.vue'
+import LegacyBanner from '../components/LegacyBanner.vue'
 import { getLantern } from '../core/store'
 import { computeAll } from '../core/checks'
 import { DEFAULT_LOFT_OPTIONS } from '../core/paginate'
 import { bodySurfaceArea } from '../core/geometry'
 import { downloadText, panelsCsv, shapeName } from '../core/exporter'
 import { coveringSpec } from '../core/craft'
+import { exportBlockedReason, isLayerActive, latestRevision } from '../core/legacy'
+import { pctText } from '../core/units'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +21,8 @@ const full = computed(() => {
   if (!l) return null
   return computeAll(l, { ...DEFAULT_LOFT_OPTIONS, paper: l.pageSize, overlapMm: l.overlapMm })
 })
+const exportBlocked = computed(() => (lantern.value ? exportBlockedReason(lantern.value) : null))
+const incompleteLayers = computed(() => latestRevision(lantern.value!)?.incompleteLayers ?? [])
 
 const ratio = computed(() => {
   const l = lantern.value
@@ -34,6 +39,7 @@ const palette = computed(() => {
     color: l.layerColors[i] || l.color,
     height: ly.heightMm,
     diameter: ly.diameterMm,
+    active: isLayerActive(ly),
     panels: full.value?.panels.panels.filter((p) => p.layerIndex === i).length || 0
   }))
 })
@@ -41,13 +47,21 @@ const palette = computed(() => {
 function exportCsv() {
   const l = lantern.value
   if (!l || !full.value) return
-  downloadText(`${l.name}-蒙面裁片清单.csv`, panelsCsv(l, full.value.panels.panels))
+  if (exportBlocked.value) {
+    if (!window.confirm(exportBlocked.value)) return
+  }
+  try {
+    downloadText(`${l.name}-蒙面裁片清单.csv`, panelsCsv(l, full.value.panels.panels))
+  } catch (e) {
+    window.alert(e instanceof Error ? e.message : String(e))
+  }
 }
 </script>
 
 <template>
   <div v-if="!lantern || !full" class="missing">找不到该灯样。<router-link to="/">返回</router-link></div>
   <div v-else class="panels-view">
+    <LegacyBanner :lantern="lantern" />
     <section class="head">
       <div>
         <h2>蒙面裁片与缝份 · {{ lantern.name }}</h2>
@@ -56,22 +70,26 @@ function exportCsv() {
           <b>缝份四边各 {{ lantern.seamAllowanceMm }}mm（已加进裁片尺寸）</b> ·
           实线 = 裁切线，绿色虚线 = 净样（折到背面的缝份线），蓝色十字 = 对位标记
           <template v-if="lantern.kind === 'revolution'">
-            · 旋转体按 <b>{{ lantern.divisions }} 等分</b>近似展开，等分数可调
+            · 旋转体按 <b>{{ lantern.divisions }} 等分</b>近似展开（以直代曲容差 ±3.00%，长度取位 0.1mm），等分数可调
           </template>
         </p>
       </div>
       <div class="ops">
-        <button @click="exportCsv">导出裁片清单 CSV</button>
+        <button :title="exportBlocked || ''" @click="exportCsv">导出裁片清单 CSV</button>
         <button class="primary" @click="router.push(`/print/${lantern.id}?view=labels`)">打印裁片标签</button>
       </div>
     </section>
+
+    <p v-if="incompleteLayers.length" class="incomplete-note">
+      第 {{ incompleteLayers.join('、') }} 层是老档缺分层高度的不完整层：本页裁片与下面配色表中这些层没有裁片、显示不全，需人工补高度后重算（走「照预设补」可直接齐全）。
+    </p>
 
     <section class="stats">
       <div class="stat"><span>裁片总块数</span><b>{{ full.panels.totalQty }}</b></div>
       <div class="stat"><span>裁片净面积</span><b>{{ (full.panels.netAreaMm2 / 1e6).toFixed(3) }} m²</b></div>
       <div class="stat"><span>含缝份裁片面积</span><b>{{ (full.panels.cutAreaMm2 / 1e6).toFixed(3) }} m²</b></div>
       <div class="stat"><span>灯体表面积</span><b>{{ full.materials.surfaceM2.toFixed(3) }} m²</b></div>
-      <div class="stat"><span>净面积 / 表面积</span><b>{{ (ratio * 100).toFixed(2) }}%</b></div>
+      <div class="stat"><span>净面积 / 表面积</span><b>{{ pctText(ratio) }}</b></div>
     </section>
 
     <div class="cards">
@@ -131,22 +149,22 @@ function exportCsv() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="p in palette" :key="p.i">
+          <tr v-for="p in palette" :key="p.i" :class="{ inactive: !p.active }">
             <td class="mono">第 {{ p.i }} 层</td>
             <td>
               <span class="dot" :style="{ background: p.color }" />
               <span class="mono">{{ p.color }}</span>
             </td>
-            <td class="num mono">{{ p.height.toFixed(1) }}</td>
-            <td class="num mono">{{ p.diameter.toFixed(1) }}</td>
-            <td class="num mono">{{ p.panels }} 种</td>
+            <td class="num mono">{{ p.active ? p.height.toFixed(1) : '缺失' }}</td>
+            <td class="num mono">{{ p.active ? p.diameter.toFixed(1) : '—' }}</td>
+            <td class="num mono">{{ p.panels }} 种<span v-if="!p.active" class="miss">（少一段轮廓）</span></td>
           </tr>
         </tbody>
       </table>
     </section>
 
     <ChecksPanel
-      :checks="full.checks.filter((c) => ['CHK-03', 'CHK-05', 'CHK-06'].includes(c.id))"
+      :checks="full.checks.filter((c) => ['CHK-03', 'CHK-05', 'CHK-06', 'CHK-09', 'CHK-10', 'CHK-11'].includes(c.id))"
       :elapsed-ms="full.elapsedMs"
       title="裁片与分页自检"
     />
@@ -181,6 +199,26 @@ h2 {
   font-size: 12.5px;
   color: var(--ink-soft);
   max-width: 900px;
+}
+
+.incomplete-note {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid #e0c78a;
+  background: #fdf6e7;
+  border-radius: 8px;
+  color: #8a5a10;
+  font-size: 12.5px;
+}
+
+tr.inactive {
+  opacity: 0.6;
+}
+
+.miss {
+  color: var(--red);
+  font-size: 11px;
+  margin-left: 4px;
 }
 
 .ops {

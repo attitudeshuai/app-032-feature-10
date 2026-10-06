@@ -3,12 +3,14 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import LanternPreview from '../components/LanternPreview.vue'
 import ChecksPanel from '../components/ChecksPanel.vue'
+import LegacyBanner from '../components/LegacyBanner.vue'
 import { getLantern, distributeLayers, syncLayerDiameters } from '../core/store'
 import { computeAll } from '../core/checks'
 import { DEFAULT_LOFT_OPTIONS } from '../core/paginate'
 import { buildGeometry, polyhedronInfo, r1 } from '../core/geometry'
 import { COVERINGS, CRAFT, coveringSpec, kindLabel } from '../core/craft'
 import { diameterFromPerimeter, diameterFromRib } from '../core/checks'
+import { pctText } from '../core/units'
 import type { Lantern, Panel } from '../core/types'
 
 const route = useRoute()
@@ -130,6 +132,7 @@ function onCtrl(v: { which: 1 | 2; x: number; y: number }) {
   </div>
 
   <div v-else class="design">
+    <LegacyBanner :lantern="lantern" />
     <section class="params">
       <h2>参数设置</h2>
 
@@ -293,7 +296,7 @@ function onCtrl(v: { which: 1 | 2; x: number; y: number }) {
           <input v-model.number="lantern.batchCount" type="number" min="1" max="500" step="1" />
         </div>
         <div class="field">
-          <label>损耗率 <em>{{ (lantern.wasteRatio * 100).toFixed(0) }}%</em></label>
+          <label>损耗率 <em>{{ pctText(lantern.wasteRatio) }}</em></label>
           <input v-model.number="lantern.wasteRatio" type="range" min="0" max="0.2" step="0.01" />
         </div>
       </div>

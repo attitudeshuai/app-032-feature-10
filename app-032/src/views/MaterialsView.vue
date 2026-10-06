@@ -2,12 +2,15 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChecksPanel from '../components/ChecksPanel.vue'
+import LegacyBanner from '../components/LegacyBanner.vue'
 import { getLantern } from '../core/store'
 import { computeAll } from '../core/checks'
 import { DEFAULT_LOFT_OPTIONS } from '../core/paginate'
 import { downloadText, materialsCsv } from '../core/exporter'
 import { coveringSpec, CRAFT } from '../core/craft'
 import { panelCutArea } from '../core/panels'
+import { exportBlockedReason, isLayerActive } from '../core/legacy'
+import { pctText } from '../core/units'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +20,7 @@ const full = computed(() => {
   if (!l) return null
   return computeAll(l, { ...DEFAULT_LOFT_OPTIONS, paper: l.pageSize, overlapMm: l.overlapMm })
 })
+const exportBlocked = computed(() => (lantern.value ? exportBlockedReason(lantern.value) : null))
 
 const cov = computed(() => (lantern.value ? coveringSpec(lantern.value.covering) : null))
 
@@ -28,6 +32,7 @@ const layerFabric = computed(() => {
     const area = ps.reduce((s, p) => s + panelCutArea(p) * p.qty, 0)
     return {
       i: i + 1,
+      active: isLayerActive(ly),
       color: l.layerColors[i] || l.color,
       height: ly.heightMm,
       diameter: ly.diameterMm,
@@ -42,23 +47,31 @@ const layerFabric = computed(() => {
 function exportCsv() {
   const l = lantern.value
   if (!l || !full.value) return
-  downloadText(`${l.name}-备料单.csv`, materialsCsv(l, full.value.materials, full.value.batch))
+  if (exportBlocked.value) {
+    if (!window.confirm(exportBlocked.value)) return
+  }
+  try {
+    downloadText(`${l.name}-备料单.csv`, materialsCsv(l, full.value.materials, full.value.batch))
+  } catch (e) {
+    window.alert(e instanceof Error ? e.message : String(e))
+  }
 }
 </script>
 
 <template>
   <div v-if="!lantern || !full || !cov" class="missing">找不到该灯样。<router-link to="/">返回</router-link></div>
   <div v-else class="materials">
+    <LegacyBanner :lantern="lantern" />
     <section class="head">
       <div>
         <h2>材料统计与备料单 · {{ lantern.name }}</h2>
         <p class="sub">
           竹篾按<b>含绑扎余量</b>长度备料；蒙面按<b>含缝份</b>的裁片面积备料；
-          批量总量 = 单灯 × 数量 × (1 + 损耗率)。
+          批量总量 = 单灯 × 数量 × (1 + 损耗率)；面积折 m² 保留 3 位小数，损耗率按百分数保留 2 位小数。
         </p>
       </div>
       <div class="ops">
-        <button @click="exportCsv">导出备料单 CSV</button>
+        <button :title="exportBlocked || ''" @click="exportCsv">导出备料单 CSV</button>
         <button class="primary" @click="router.push(`/print/${lantern.id}?view=frame`)">打印备料 / 清单</button>
       </div>
     </section>
@@ -69,7 +82,7 @@ function exportCsv() {
         <input v-model.number="lantern.batchCount" type="number" min="1" max="500" step="1" />
       </div>
       <div class="field">
-        <label>损耗率 <em>{{ (lantern.wasteRatio * 100).toFixed(0) }}%</em></label>
+        <label>损耗率 <em>{{ pctText(lantern.wasteRatio) }}</em></label>
         <input v-model.number="lantern.wasteRatio" type="range" min="0" max="0.2" step="0.01" />
       </div>
       <p class="formula mono">
@@ -150,18 +163,18 @@ function exportCsv() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in layerFabric" :key="r.i">
-            <td class="mono">第 {{ r.i }} 层</td>
+          <tr v-for="r in layerFabric" :key="r.i" :class="{ inactive: !r.active }">
+            <td class="mono">第 {{ r.i }} 层<span v-if="!r.active" class="miss">（不完整）</span></td>
             <td>
               <span class="dot" :style="{ background: r.color }" />
               <span class="mono">{{ r.color }}</span>
             </td>
-            <td class="num mono">{{ r.height.toFixed(1) }}</td>
-            <td class="num mono">{{ r.diameter.toFixed(1) }}</td>
-            <td class="num mono">{{ r.kinds }}</td>
-            <td class="num mono">{{ (r.perPiece / 1e6).toFixed(4) }}</td>
-            <td class="num mono">{{ r.qty }}</td>
-            <td class="num mono">{{ r.areaM2.toFixed(3) }}</td>
+            <td class="num mono">{{ r.active ? r.height.toFixed(1) : '缺失' }}</td>
+            <td class="num mono">{{ r.active ? r.diameter.toFixed(1) : '—' }}</td>
+            <td class="num mono">{{ r.kinds }}<span v-if="!r.active" class="miss">（少一段）</span></td>
+            <td class="num mono">{{ r.active ? (r.perPiece / 1e6).toFixed(4) : '—' }}</td>
+            <td class="num mono">{{ r.active ? r.qty : '—' }}</td>
+            <td class="num mono">{{ r.active ? r.areaM2.toFixed(3) : '—' }}</td>
           </tr>
         </tbody>
       </table>
@@ -410,5 +423,15 @@ tr.led td {
 .missing {
   padding: 40px;
   text-align: center;
+}
+
+tr.inactive {
+  opacity: 0.6;
+}
+
+.miss {
+  color: var(--red);
+  font-size: 11px;
+  margin-left: 4px;
 }
 </style>

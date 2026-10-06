@@ -9,6 +9,7 @@
 import { computed, onUnmounted, reactive, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChecksPanel from '../components/ChecksPanel.vue'
+import LegacyBanner from '../components/LegacyBanner.vue'
 import { getLantern } from '../core/store'
 import { CALIBRATION_CIRCLE_MM, CALIBRATION_RULER_MM, computeAll } from '../core/checks'
 import {
@@ -23,6 +24,7 @@ import {
 import { groupMembers } from '../core/frame'
 import { kindName, shapeName } from '../core/exporter'
 import { coveringLabel, kindLabel, styleLabel } from '../core/craft'
+import { exportBlockedReason, latestRevision, recordExport } from '../core/legacy'
 import type { Panel } from '../core/types'
 
 type PrintMode = 'loft' | 'frame' | 'labels'
@@ -68,6 +70,8 @@ const full = computed(() => {
 const sheets = computed(() => full.value?.sheets ?? [])
 const splitCheck = computed(() => assertNoPanelSplit(sheets.value))
 const frameGroups = computed(() => (full.value ? groupMembers(full.value.frame.members) : []))
+const exportBlocked = computed(() => (lantern.value ? exportBlockedReason(lantern.value) : null))
+const legacyRev = computed(() => (lantern.value ? latestRevision(lantern.value) : null))
 
 const pageDims = computed(() => (mode.value === 'loft' ? PAPER_DIMS[opts.paper] : PAPER_DIMS.A4))
 
@@ -106,6 +110,11 @@ function setMode(m: PrintMode) {
 }
 
 function doPrint() {
+  if (exportBlocked.value) {
+    if (!window.confirm(exportBlocked.value)) return
+  }
+  // 登记一次 1:1 图纸输出（换路重补后这份图纸也要按新版重出）
+  if (lantern.value) recordExport(lantern.value, 'drawing')
   window.print()
 }
 
@@ -216,6 +225,7 @@ function today(): string {
 <template>
   <div v-if="!lantern || !full" class="missing">找不到该灯样。<router-link to="/">返回</router-link></div>
   <div v-else class="print-view">
+    <LegacyBanner :lantern="lantern" />
     <!-- 屏显控制区（打印时隐藏） -->
     <section class="controls no-print">
       <div class="ctl-head">
@@ -224,10 +234,13 @@ function today(): string {
           <p class="sub">
             单位全 mm（1 位小数）· 图纸按真实毫米绘制，<b>打印时必须 100% 缩放</b>。
             1:1 依赖用户关闭缩放，本页已附 {{ CALIBRATION_RULER_MM }}mm 校验尺与 Ø{{ CALIBRATION_CIRCLE_MM }}mm 校验圆。
+            <template v-if="legacyRev && legacyRev.revision > 0">
+              本图纸按补齐第 {{ legacyRev.revision }} 版（{{ legacyRev.route === 'preset' ? '照预设补' : '按默认值顶' }}）的同一份灯样出图，共 {{ sheets.length }} 页。
+            </template>
           </p>
         </div>
         <div class="ops">
-          <button class="primary" @click="doPrint">打印 / 另存为 PDF</button>
+          <button class="primary" :title="exportBlocked || ''" @click="doPrint">打印 / 另存为 PDF</button>
           <button @click="router.push(`/panels/${lantern.id}`)">返回裁片页</button>
         </div>
       </div>
@@ -648,7 +661,7 @@ function today(): string {
     <ChecksPanel
       v-if="full && mode === 'loft'"
       class="no-print"
-      :checks="full.checks.filter((c) => ['CHK-05', 'CHK-06', 'CHK-08'].includes(c.id))"
+      :checks="full.checks.filter((c) => ['CHK-05', 'CHK-06', 'CHK-08', 'CHK-09', 'CHK-10', 'CHK-11'].includes(c.id))"
       :elapsed-ms="full.elapsedMs"
       title="放样与分页自检"
     />

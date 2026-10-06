@@ -186,7 +186,11 @@ export function paginate(l: Lantern, opts: LoftOptions): Sheet[] {
   if (opts.includeStrips) {
     const usable = contentW - STRIP_GUTTER - 4
     const overlap = Math.max(0, opts.overlapMm)
+    // 长条分段编号按「构件序号」全局连续：T<构件号>-<段号>/<总段数>，
+    // 不随分页变化（旧实现用当前页码编号，重排分页会重号），保证不断号、不重号。
+    let memberNo = 0
     for (const m of buildFrame(l).members) {
+      memberNo += 1
       const total = m.lengthMm
       const advanceMm = Math.max(10, usable - overlap)
       const segCount = total <= usable + EPS ? 1 : Math.ceil((total - overlap) / advanceMm)
@@ -196,7 +200,7 @@ export function paginate(l: Lantern, opts: LoftOptions): Sheet[] {
         if (!fitsRow(contentW)) nextRow()
         if (!fitsPage(STRIP_ROW_H)) startSheet()
         const cur = ensureSheet()
-        const tag = `S${cur.index}-${i + 1}/${segCount}`
+        const tag = `T${memberNo}-${i + 1}/${segCount}`
         cur.items.push({
           type: 'strip',
           member: m,
@@ -263,5 +267,37 @@ export function assertNoPanelSplit(sheets: Sheet[]): { pass: boolean; detail: st
     detail: pass
       ? `共 ${seen.size} 种裁片，每块只出现在一页且完整（超区整块输出 ${overflow} 块）`
       : `存在跨页裁片：${split.map(([id, n]) => `${id}×${n}`).join('、')}`
+  }
+}
+
+/** 断言：长条分段编号全局唯一、同构件段号连续（补完重排分页后不许断号、不许重号） */
+export function assertStripNumbering(sheets: Sheet[]): { pass: boolean; detail: string } {
+  const tags = new Map<string, { segIndex: number; segCount: number }[]>()
+  for (const s of sheets) {
+    for (const it of s.items) {
+      if (it.type !== 'strip') continue
+      const head = it.tag.split('-')[0] // T<构件号>
+      const arr = tags.get(head) || []
+      arr.push({ segIndex: it.segIndex, segCount: it.segCount })
+      tags.set(head, arr)
+    }
+  }
+  const problems: string[] = []
+  for (const [head, arr] of tags) {
+    const dup = arr.length !== new Set(arr.map((x) => x.segIndex)).size
+    if (dup) problems.push(`${head} 段号重号`)
+    const segCount = arr[0]?.segCount ?? 0
+    const got = [...new Set(arr.map((x) => x.segIndex))].sort((a, b) => a - b)
+    const want = Array.from({ length: segCount }, (_, i) => i)
+    if (got.length !== want.length || got.some((v, i) => v !== want[i])) {
+      problems.push(`${head} 段号断号（应有 1–${segCount}，实得 ${got.map((v) => v + 1).join('、') || '无'}）`)
+    }
+  }
+  return {
+    pass: problems.length === 0,
+    detail:
+      problems.length === 0
+        ? `共 ${tags.size} 根带长条的构件，分段编号 T<构件号>-<段号>/<总段数> 全局唯一且连续（重排分页不断号、不重号）`
+        : problems.join('；')
   }
 }

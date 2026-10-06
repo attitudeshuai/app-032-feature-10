@@ -2,12 +2,14 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChecksPanel from '../components/ChecksPanel.vue'
+import LegacyBanner from '../components/LegacyBanner.vue'
 import { getLantern } from '../core/store'
 import { computeAll } from '../core/checks'
 import { DEFAULT_LOFT_OPTIONS } from '../core/paginate'
 import { groupMembers } from '../core/frame'
 import { kindName, membersCsv, downloadText } from '../core/exporter'
 import { styleLabel } from '../core/craft'
+import { exportBlockedReason } from '../core/legacy'
 import type { FrameMember } from '../core/types'
 
 const route = useRoute()
@@ -19,6 +21,7 @@ const full = computed(() => {
   return computeAll(l, { ...DEFAULT_LOFT_OPTIONS, paper: l.pageSize, overlapMm: l.overlapMm })
 })
 const groups = computed(() => (full.value ? groupMembers(full.value.frame.members) : []))
+const exportBlocked = computed(() => (lantern.value ? exportBlockedReason(lantern.value) : null))
 
 function bendText(m: FrameMember): string {
   if (m.bendRadiusMm) return `R${m.bendRadiusMm.toFixed(1)}mm`
@@ -29,26 +32,34 @@ function bendText(m: FrameMember): string {
 function exportCsv() {
   const l = lantern.value
   if (!l || !full.value) return
-  downloadText(`${l.name}-构件清单.csv`, membersCsv(l, full.value.frame.members))
+  if (exportBlocked.value) {
+    if (!window.confirm(exportBlocked.value)) return
+  }
+  try {
+    downloadText(`${l.name}-构件清单.csv`, membersCsv(l, full.value.frame.members))
+  } catch (e) {
+    window.alert(e instanceof Error ? e.message : String(e))
+  }
 }
 </script>
 
 <template>
   <div v-if="!lantern || !full" class="missing">找不到该灯样。<router-link to="/">返回</router-link></div>
   <div v-else class="frame-view">
+    <LegacyBanner :lantern="lantern" />
     <section class="head">
       <div>
         <h2>骨架件表 · {{ lantern.name }}</h2>
         <p class="sub">
           {{ styleLabel(lantern.mouthStyle) }} / {{ styleLabel(lantern.bottomStyle) }} ·
           最大直径 {{ lantern.maxDiameterMm }}mm · 总高 {{ lantern.totalHeightMm }}mm ·
-          {{ lantern.layers.length }} 层 · {{ lantern.sides }} 棱 ·
+          {{ lantern.layers.length }} 层（成段 {{ full.frame.geometry.activeLayers.length }} 层）· {{ lantern.sides }} 棱 ·
           每根篾两端各留 <b>{{ lantern.lashAllowanceMm }}mm</b> 绑扎余量，
           横篾圈接头处（圆形 1 处 / 多边形 {{ lantern.sides }} 处）同样加余量。
         </p>
       </div>
       <div class="ops">
-        <button @click="exportCsv">导出构件清单 CSV</button>
+        <button :title="exportBlocked || ''" @click="exportCsv">导出构件清单 CSV</button>
         <button class="primary" @click="router.push(`/print/${lantern.id}?view=frame`)">打印构件清单</button>
       </div>
     </section>
@@ -93,7 +104,7 @@ function exportCsv() {
     </section>
 
     <ChecksPanel
-      :checks="full.checks.filter((c) => ['CHK-01', 'CHK-02', 'CHK-04', 'CHK-08'].includes(c.id))"
+      :checks="full.checks.filter((c) => ['CHK-01', 'CHK-02', 'CHK-04', 'CHK-08', 'CHK-09', 'CHK-10', 'CHK-11'].includes(c.id))"
       :elapsed-ms="full.elapsedMs"
       title="骨架计算自检"
     />

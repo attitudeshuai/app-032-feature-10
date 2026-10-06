@@ -14,6 +14,38 @@
       "rule": "按灯体体积 × 0.35 颗/升估算（最低 12 颗，暖白高亮 LED），仅作亮度建议，不做电气设计与控制"
     }
   },
+  "legacy": {
+    "rule": "老灯样（早期存档：无底口直径、无逐层配色、分层里无直径，且可能缺旋转体等分数）读入时的两条补齐路：preset=能与当前灯型库对上就照预设补，补完各页齐全、可直接放样，但与当年旧档未必一致；default=对不上时按本默认值目录逐项顶值，逐项注明缺什么、顶成什么、取自哪条预设/工艺默认，与旧档对得上，但被顶值的层可能少一段轮廓、显示不全，需人工补。",
+    "matchKeys": ["kind", "sides", "mouthStyle", "bottomStyle", "layerCount", "maxDiameterMm", "totalHeightMm", "mouthDiameterMm"],
+    "matchRule": "以上字段在旧档里都存在且与某条预设逐项相等（整数 mm 四舍五入后比较）才算『对得上当前灯型库』；只要有一项缺失或不相等，就只能走 default 路。匹配只用于决定补值来源，绝不覆盖旧档里已有的任何字段。",
+    "defaults": {
+      "baseDiameterMm": { "fallback": "mouthDiameterMm", "note": "旧档无底口直径：早期底口与收口同径，按上口（收口直径）顶值；flat 平口由几何按最大直径处理。" },
+      "layerColors": { "fallback": "color", "note": "旧档无逐层配色：每层回落主色 color（与蒙面页既有回落规则一致），并标为需人工补的层。" },
+      "layers.diameterMm": { "fallback": "profile", "note": "旧档分层无直径：按该灯已写明的口径/最大直径/收口曲线沿分层高度重算，r1 取位（mm 保留 1 位小数），写回存档。" },
+      "layers.heightMm": { "fallback": "totalHeightMm/layerCount", "note": "旧档连分层高度也缺：default 路不替它造轮廓，该层标为不完整层（构件表/裁片页少这一段），由人工补；preset 路按预设 layerCount 均摊总高补齐。" },
+      "divisions": { "fallback": "craft.defaultDivisions", "note": "旋转体等分数缺省 = 24。" },
+      "seamAllowanceMm": { "fallback": "craft.defaultSeamAllowanceMm", "note": "缝份默认 10mm（每边）。" },
+      "lashAllowanceMm": { "fallback": "craft.defaultLashAllowanceMm", "note": "绑扎余量默认每端 20mm。" },
+      "overlapMm": { "fallback": "craft.defaultOverlapMm", "note": "长条跨页搭接默认 10mm。" },
+      "batchCount": { "fallback": 20, "note": "批量数量默认 20 个。" },
+      "wasteRatio": { "fallback": "covering.wasteRatio", "note": "损耗率按蒙面材料默认（宣纸 12% / 绸布 10% / 羊皮纸 8%）。" },
+      "pageSize": { "fallback": "A4", "note": "1:1 放样默认 A4。" },
+      "smoothness": { "fallback": 0.45, "note": "收口曲线强度默认 0.45。" },
+      "ctrl1": { "fallback": { "x": 0.12, "y": 0.3 }, "note": "葫芦口贝塞尔控制点 1 默认。" },
+      "ctrl2": { "fallback": { "x": 0.85, "y": 0.78 }, "note": "葫芦口贝塞尔控制点 2 默认。" }
+    },
+    "approximation": {
+      "divisionsDefault": 24,
+      "divMin": 6,
+      "divMax": 96,
+      "chordTolerancePct": 3.0,
+      "chordToleranceRule": "旋转体按 N 等分以直代曲：弦长和 / 弧长的偏差以面积比衡量，Σ裁片净面积 ÷ 灯体表面积 落在 [97%,103%] 内合格（百分数保留 2 位小数）；超出则提示提高等分数。",
+      "lengthRound": "r1：mm 保留 1 位小数",
+      "areaRound": "r3：折成 m² 保留 3 位小数",
+      "ratioRound": "百分数保留 2 位小数",
+      "mmToCm": "cm = Math.round(mm/10)，整数取整（不保留小数）"
+    }
+  },
   "coverings": [
     {
       "id": "xuan",

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { COVERINGS, PRESETS, coveringLabel, kindLabel, styleLabel } from '../core/craft'
 import { addLantern, createFromPreset, duplicateLantern, removeLantern, state } from '../core/store'
+import { isReissuedCompletely, isVoided, latestRevision, pendingReissueKinds } from '../core/legacy'
 
 const router = useRouter()
 
@@ -26,6 +27,19 @@ function del(id: string, name: string) {
 }
 
 const lanterns = computed(() => state.lanterns)
+const pendingCount = computed(() => state.pendingLegacy.length)
+
+function legacyBadge(l: (typeof state.lanterns)[number]): { text: string; cls: string } | null {
+  const rev = latestRevision(l)
+  if (!rev || rev.revision === 0) return null
+  if (isVoided(l)) {
+    return isReissuedCompletely(l)
+      ? { text: '旧版作废·已重出齐全', cls: 'ok' }
+      : { text: `旧版作废·待重出${pendingReissueKinds(l).length}份`, cls: 'bad' }
+  }
+  if (rev.incompleteLayers.length) return { text: `${rev.route === 'preset' ? '预设补' : '默认顶'}·缺${rev.incompleteLayers.length}层`, cls: 'warn' }
+  return { text: rev.route === 'preset' ? '预设补齐' : '默认顶值', cls: 'ok' }
+}
 
 function updatedAt(iso: string): string {
   const d = new Date(iso)
@@ -78,6 +92,10 @@ function updatedAt(iso: string): string {
 
     <section class="block">
       <h2>我的灯样 <em>（保存在本机浏览器，不上传）</em></h2>
+      <router-link v-if="pendingCount > 0" class="pending-bar" to="/legacy">
+        <b>{{ pendingCount }} 盏老灯样读进来了但还没补齐</b>
+        <span>缺底口直径 / 逐层配色 / 分层直径等 · 点开逐条确认补值（照预设补 或 按默认值顶），确认后才写回本机 →</span>
+      </router-link>
       <p v-if="lanterns.length === 0" class="empty">还没有灯样，先在上面选一个灯型新建。</p>
       <table v-else class="list">
         <thead>
@@ -87,6 +105,7 @@ function updatedAt(iso: string): string {
             <th>尺寸</th>
             <th>层数 / 棱数</th>
             <th>蒙面</th>
+            <th>补齐状态</th>
             <th>最近修改</th>
             <th>操作</th>
           </tr>
@@ -98,6 +117,10 @@ function updatedAt(iso: string): string {
             <td class="mono">⌀{{ l.maxDiameterMm }} × H{{ l.totalHeightMm }}</td>
             <td class="mono">{{ l.layers.length }} 层 / {{ l.sides }} 棱</td>
             <td>{{ coveringLabel(l.covering) }}</td>
+            <td>
+              <span v-if="legacyBadge(l)" class="lb" :class="legacyBadge(l)!.cls">{{ legacyBadge(l)!.text }}</span>
+              <span v-else class="lb dim">新建</span>
+            </td>
             <td class="mono">{{ updatedAt(l.updatedAt) }}</td>
             <td class="ops">
               <button @click="open(l.id)">打开</button>
@@ -354,6 +377,54 @@ button.danger:hover {
 .empty {
   color: var(--ink-soft);
   font-size: 13px;
+}
+
+.pending-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border: 1px solid #e0c78a;
+  background: #fdf6e7;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #8a5a10;
+}
+.pending-bar b {
+  color: #8f1c19;
+}
+.pending-bar span {
+  font-size: 12px;
+  color: #8a5a10;
+}
+
+.lb {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.lb.ok {
+  background: #eaf4ef;
+  color: var(--jade);
+  border-color: #cbe3d8;
+}
+.lb.warn {
+  background: #f6e3ba;
+  color: #8a5a10;
+  border-color: #e0c78a;
+}
+.lb.bad {
+  background: #fadbd6;
+  color: var(--red);
+  border-color: #e8a39c;
+}
+.lb.dim {
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  border-color: var(--line);
 }
 
 .covers {

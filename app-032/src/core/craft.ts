@@ -49,6 +49,28 @@ export const CRAFT = raw.craft as {
   led: { perLiter: number; min: number; rule: string }
 }
 
+/** 老灯样补齐规则：默认值目录、对得上的判定字段、等分近似容差与取位（见 lantern-types.json legacy 节） */
+export const LEGACY = raw.legacy as {
+  rule: string
+  matchKeys: string[]
+  matchRule: string
+  defaults: Record<
+    string,
+    { fallback: number | string | { x: number; y: number }; note: string }
+  >
+  approximation: {
+    divisionsDefault: number
+    divMin: number
+    divMax: number
+    chordTolerancePct: number
+    chordToleranceRule: string
+    lengthRound: string
+    areaRound: string
+    ratioRound: string
+    mmToCm: string
+  }
+}
+
 export const COVERINGS = raw.coverings as CoveringSpec[]
 export const PRESETS = raw.presets as LanternPreset[]
 
