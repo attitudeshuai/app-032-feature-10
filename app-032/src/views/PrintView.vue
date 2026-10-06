@@ -9,7 +9,7 @@
 import { computed, onUnmounted, reactive, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChecksPanel from '../components/ChecksPanel.vue'
-import { getLantern } from '../core/store'
+import { getLantern, migrationOf } from '../core/store'
 import { CALIBRATION_CIRCLE_MM, CALIBRATION_RULER_MM, computeAll } from '../core/checks'
 import {
   DEFAULT_LOFT_OPTIONS,
@@ -22,6 +22,7 @@ import {
 } from '../core/paginate'
 import { groupMembers } from '../core/frame'
 import { kindName, shapeName } from '../core/exporter'
+import { migrationSummary } from '../core/legacy'
 import { coveringLabel, kindLabel, styleLabel } from '../core/craft'
 import type { Panel } from '../core/types'
 
@@ -68,6 +69,12 @@ const full = computed(() => {
 const sheets = computed(() => full.value?.sheets ?? [])
 const splitCheck = computed(() => assertNoPanelSplit(sheets.value))
 const frameGroups = computed(() => (full.value ? groupMembers(full.value.frame.members) : []))
+const migNote = computed(() => {
+  const l = lantern.value
+  if (!l) return ''
+  const m = migrationOf(l.id)
+  return m ? migrationSummary(m) : ''
+})
 
 const pageDims = computed(() => (mode.value === 'loft' ? PAPER_DIMS[opts.paper] : PAPER_DIMS.A4))
 
@@ -193,6 +200,7 @@ function stripText(it: SheetItemStrip): string {
     `全长 ${f1(it.totalMm)}mm`,
     `本段 ${f1(it.lengthMm)}mm（整根第 ${f1(it.startMm)}–${f1(it.startMm + it.lengthMm)}mm）`
   ]
+  if (it.segCount > 1) parts.push(`分段 ${it.segIndex + 1}/${it.segCount}`)
   if (it.overlapMm > 0) {
     const mates = [it.prevTag, it.nextTag].filter(Boolean).join(' / ')
     parts.push(`与 ${mates} 搭接 ${f1(it.overlapMm)}mm`)
@@ -578,6 +586,7 @@ function today(): string {
         每端绑扎余量 {{ lantern.lashAllowanceMm }}mm · 蒙面 {{ coveringLabel(lantern.covering) }} ·
         打印日期 {{ today() }}
       </p>
+      <p v-if="migNote" class="doc-meta">老档补齐：{{ migNote }}</p>
       <table class="doc-table">
         <thead>
           <tr>

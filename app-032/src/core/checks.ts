@@ -147,15 +147,27 @@ function runChecks(
     })
   }
 
-  // ---- CHK-06 分页：裁片不跨页 ----
+  // ---- CHK-06 分页：裁片不跨页 + 长条分段编号连号 ----
   {
     const r = assertNoPanelSplit(sheets)
+    // 长条分段编号：全图 S1…Sn 顺序连号，不许断号也不许重号
+    const stripTags: number[] = []
+    for (const s of sheets) {
+      for (const it of s.items) {
+        if (it.type === 'strip') stripTags.push(Number(it.tag.slice(1)))
+      }
+    }
+    const seqOk = stripTags.every((v, i) => v === i + 1)
+    const seqNote =
+      stripTags.length > 0
+        ? `；长条分段编号 S1…S${stripTags.length} ${seqOk ? '顺序连号（无断号、无重号）' : '存在断号或重号！'}`
+        : ''
     out.push({
       id: 'CHK-06',
       title: '分页：任一裁片不跨页（长条跨页带对位十字与搭接量）',
-      pass: r.pass,
-      value: r.pass ? '通过' : '失败',
-      detail: `${r.detail}；跨页仅出现在骨架长条上，接缝处绘制对位十字并标注搭接 ${f1(loftOverlap(sheets))}mm 与拼接编号`
+      pass: r.pass && seqOk,
+      value: r.pass && seqOk ? '通过' : '失败',
+      detail: `${r.detail}；跨页仅出现在骨架长条上，接缝处绘制对位十字并标注搭接 ${f1(loftOverlap(sheets))}mm 与拼接编号${seqNote}`
     })
   }
 

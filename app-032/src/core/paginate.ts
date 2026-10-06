@@ -44,7 +44,7 @@ export interface SheetItemStrip {
   segCount: number
   /** 本段起点在整根构件上的位置（mm），用于 1:1 图上标注标尺读数 */
   startMm: number
-  /** 拼接编号，如 S4-1/2 */
+  /** 拼接编号：全图顺序连号 S1、S2…（同一构件的分段编号紧挨，无断号无重号） */
   tag: string
   /** 相邻段编号（用于标注搭接方向） */
   prevTag?: string
@@ -186,6 +186,8 @@ export function paginate(l: Lantern, opts: LoftOptions): Sheet[] {
   if (opts.includeStrips) {
     const usable = contentW - STRIP_GUTTER - 4
     const overlap = Math.max(0, opts.overlapMm)
+    // 长条分段编号：全图从 S1 起顺序连号，同一构件的分段紧挨发出，不许断号也不许重号
+    let stripSeq = 0
     for (const m of buildFrame(l).members) {
       const total = m.lengthMm
       const advanceMm = Math.max(10, usable - overlap)
@@ -196,7 +198,7 @@ export function paginate(l: Lantern, opts: LoftOptions): Sheet[] {
         if (!fitsRow(contentW)) nextRow()
         if (!fitsPage(STRIP_ROW_H)) startSheet()
         const cur = ensureSheet()
-        const tag = `S${cur.index}-${i + 1}/${segCount}`
+        const tag = `S${++stripSeq}`
         cur.items.push({
           type: 'strip',
           member: m,

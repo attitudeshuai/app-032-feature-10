@@ -2,10 +2,11 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChecksPanel from '../components/ChecksPanel.vue'
-import { getLantern } from '../core/store'
+import { getLantern, migrationOf } from '../core/store'
 import { computeAll } from '../core/checks'
 import { DEFAULT_LOFT_OPTIONS } from '../core/paginate'
 import { downloadText, materialsCsv } from '../core/exporter'
+import { migrationSummary } from '../core/legacy'
 import { coveringSpec, CRAFT } from '../core/craft'
 import { panelCutArea } from '../core/panels'
 
@@ -42,7 +43,8 @@ const layerFabric = computed(() => {
 function exportCsv() {
   const l = lantern.value
   if (!l || !full.value) return
-  downloadText(`${l.name}-备料单.csv`, materialsCsv(l, full.value.materials, full.value.batch))
+  const m = migrationOf(l.id)
+  downloadText(`${l.name}-备料单.csv`, materialsCsv(l, full.value.materials, full.value.batch, m ? migrationSummary(m) : undefined))
 }
 </script>
 

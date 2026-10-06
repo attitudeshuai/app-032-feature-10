@@ -1,8 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { COVERINGS, PRESETS, coveringLabel, kindLabel, styleLabel } from '../core/craft'
-import { addLantern, createFromPreset, duplicateLantern, removeLantern, state } from '../core/store'
+import { COVERINGS, CRAFT, PRESETS, coveringLabel, kindLabel, styleLabel } from '../core/craft'
+import {
+  addLantern,
+  confirmMigrations,
+  createFromPreset,
+  discardMigrations,
+  duplicateLantern,
+  removeLantern,
+  state
+} from '../core/store'
+import { LEGACY_ROUNDING_NOTE, migrationSummary } from '../core/legacy'
 
 const router = useRouter()
 
@@ -27,6 +36,28 @@ function del(id: string, name: string) {
 
 const lanterns = computed(() => state.lanterns)
 
+// ---- 老灯样补齐：一批一次读完，确认了才写回本机存储 ----
+const pending = computed(() => state.pendingMigrations)
+const legacyNotes = CRAFT.legacyDefaults.notes
+const roundingNote = LEGACY_ROUNDING_NOTE
+const justConfirmed = ref(0)
+
+function confirmAll() {
+  const n = state.pendingMigrations.length
+  if (confirmMigrations()) justConfirmed.value = n
+}
+
+function skipAll() {
+  discardMigrations()
+}
+
+const pendingOf = (id: string) => state.pendingMigrations.find((m) => m.id === id)
+const doneOf = (id: string) => state.migrations[id]
+const doneTitle = (id: string) => {
+  const m = state.migrations[id]
+  return m ? migrationSummary(m) : ''
+}
+
 function updatedAt(iso: string): string {
   const d = new Date(iso)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(
@@ -49,6 +80,65 @@ function updatedAt(iso: string): string {
         <li><b>3</b> 出蒙面裁片：实际尺寸 + 缝份 + 对位标记</li>
         <li><b>4</b> 打印 1:1 放样图（含 100mm 校验尺）与备料单</li>
       </ul>
+    </section>
+
+    <section v-if="pending.length" class="block migrate">
+      <h2>老灯样补齐 · {{ pending.length }} 盏待确认</h2>
+      <p class="m-note">
+        这批老灯样读入时缺字段（底口直径 / 逐层配色 / 分层直径等），已按下面清单在内存里补齐：
+        参数预览、骨架件表、蒙面裁片、1:1 放样图与分页、备料与批量、三份导出单都按补齐后的同一份数据算，
+        改一处各处跟着刷新。<b>确认后才写回本机存档</b>；同一批重复确认不会写成两版；写回中途出错会退回读之前的样子。
+        目前仍拿补齐前老数的地方只有一处：<b>本机存档</b>。
+      </p>
+      <p class="m-note mono">{{ roundingNote }}</p>
+      <details class="m-rules">
+        <summary>写明的默认值（缺的那几项按这些规则顶）</summary>
+        <ul>
+          <li v-for="(n, i) in legacyNotes" :key="i">{{ n }}</li>
+        </ul>
+      </details>
+      <p class="m-warn">
+        ⚠ 确认写回并据此导出单子后，若发现挑错了版本：存档里补出来的这一份、已经发出去的单子与图纸都得作废重来，
+        已经照补出来的值裁好的那几片料要重裁。
+      </p>
+
+      <article v-for="m in pending" :key="m.id" class="m-card">
+        <header>
+          <b>{{ m.name }}</b>
+          <span class="m-id mono">{{ m.id }}</span>
+          <span class="m-path" :class="m.path">
+            {{ m.path === 'preset' ? `照预设「${m.presetName}」补齐` : '按写明的默认值兜底' }}
+          </span>
+          <span class="m-count">补 {{ m.items.length }} 项</span>
+        </header>
+        <table>
+          <thead>
+            <tr>
+              <th>缺哪一项</th>
+              <th>按什么值顶</th>
+              <th>这个值来自哪</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="it in m.items" :key="it.field">
+              <td>{{ it.label }}<span class="mono m-field">{{ it.field }}</span></td>
+              <td class="mono">{{ it.value }}</td>
+              <td>{{ it.source }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="m-cost">代价：{{ m.costNote }}</p>
+      </article>
+
+      <div class="m-ops">
+        <button class="primary" @click="confirmAll">确认补齐并写回本机存档</button>
+        <button @click="skipAll">本次先不写回（各页仍按补齐后数据浏览）</button>
+      </div>
+      <p v-if="state.storageError" class="m-err">{{ state.storageError }}</p>
+    </section>
+
+    <section v-else-if="justConfirmed > 0" class="block migrate-done">
+      <p>✔ 已确认 {{ justConfirmed }} 盏老灯样的补齐并写回本机存档：存档、各页与三份导出单现在取的是同一份补齐后的数据。</p>
     </section>
 
     <section class="block">
@@ -93,7 +183,13 @@ function updatedAt(iso: string): string {
         </thead>
         <tbody>
           <tr v-for="l in lanterns" :key="l.id">
-            <td class="name">{{ l.name }}</td>
+            <td class="name">
+              {{ l.name }}
+              <span v-if="pendingOf(l.id)" class="tag tag-pending">待确认补齐 {{ pendingOf(l.id)?.items.length }} 项</span>
+              <span v-else-if="doneOf(l.id)" class="tag tag-done" :title="doneTitle(l.id)">
+                已补齐 {{ doneOf(l.id)?.items.length }} 项
+              </span>
+            </td>
             <td>{{ kindLabel(l.kind) }}</td>
             <td class="mono">⌀{{ l.maxDiameterMm }} × H{{ l.totalHeightMm }}</td>
             <td class="mono">{{ l.layers.length }} 层 / {{ l.sides }} 棱</td>
@@ -354,6 +450,194 @@ button.danger:hover {
 .empty {
   color: var(--ink-soft);
   font-size: 13px;
+}
+
+.migrate {
+  background: #fff8ea;
+  border: 1px solid #e8cfa4;
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+
+.migrate h2 {
+  font-size: 16px;
+  margin: 0 0 10px;
+  color: #8f1c19;
+  border-left: 4px solid var(--red);
+  padding-left: 10px;
+}
+
+.m-note {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  max-width: 1000px;
+}
+
+.m-note b {
+  color: #8f1c19;
+}
+
+.m-rules {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+}
+
+.m-rules summary {
+  cursor: pointer;
+  color: var(--blue);
+}
+
+.m-rules ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.m-warn {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #8a4b12;
+  background: #fdf3e2;
+  border: 1px solid #e8cfa4;
+  border-radius: 6px;
+}
+
+.m-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.m-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.m-card header b {
+  font-size: 14px;
+}
+
+.m-id {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.m-path {
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid #cbe3d8;
+  background: #eaf4ef;
+  color: var(--jade);
+}
+
+.m-path.defaults {
+  background: #fdf3e2;
+  border-color: #e8cfa4;
+  color: #8a4b12;
+}
+
+.m-count {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--red);
+  background: #fbeae6;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.m-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.m-card th {
+  text-align: left;
+  padding: 5px 8px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-weight: 500;
+  font-size: 11px;
+  border-bottom: 1px solid var(--line);
+}
+
+.m-card td {
+  padding: 5px 8px;
+  border-bottom: 1px dashed var(--line);
+  vertical-align: top;
+}
+
+.m-card tr:last-child td {
+  border-bottom: none;
+}
+
+.m-field {
+  display: block;
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+
+.m-cost {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #8a4b12;
+}
+
+.m-ops {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.m-err {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--red);
+}
+
+.migrate-done {
+  background: #eaf4ef;
+  border: 1px solid #cbe3d8;
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+
+.migrate-done p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--jade);
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: 400;
+  padding: 1px 7px;
+  border-radius: 999px;
+  vertical-align: 1px;
+}
+
+.tag-pending {
+  background: #fdf3e2;
+  color: #8a4b12;
+  border: 1px solid #e8cfa4;
+}
+
+.tag-done {
+  background: #eaf4ef;
+  color: var(--jade);
+  border: 1px solid #cbe3d8;
 }
 
 .covers {

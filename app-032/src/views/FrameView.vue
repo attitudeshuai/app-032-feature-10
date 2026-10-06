@@ -2,11 +2,12 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChecksPanel from '../components/ChecksPanel.vue'
-import { getLantern } from '../core/store'
+import { getLantern, migrationOf } from '../core/store'
 import { computeAll } from '../core/checks'
 import { DEFAULT_LOFT_OPTIONS } from '../core/paginate'
 import { groupMembers } from '../core/frame'
 import { kindName, membersCsv, downloadText } from '../core/exporter'
+import { migrationSummary } from '../core/legacy'
 import { styleLabel } from '../core/craft'
 import type { FrameMember } from '../core/types'
 
@@ -29,7 +30,8 @@ function bendText(m: FrameMember): string {
 function exportCsv() {
   const l = lantern.value
   if (!l || !full.value) return
-  downloadText(`${l.name}-构件清单.csv`, membersCsv(l, full.value.frame.members))
+  const m = migrationOf(l.id)
+  downloadText(`${l.name}-构件清单.csv`, membersCsv(l, full.value.frame.members, m ? migrationSummary(m) : undefined))
 }
 </script>
 

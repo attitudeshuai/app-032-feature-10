@@ -21,6 +21,12 @@ const nav = computed(() => {
     { to: `/materials/${id}`, label: '材料与备料' }
   ]
 })
+
+/** 当前灯样的待确认老档补齐（确认前：唯独本机存档还拿的是补之前的老数） */
+const pendingMigration = computed(() => {
+  const id = lanternId.value
+  return id ? state.pendingMigrations.find((m) => m.id === id) : undefined
+})
 </script>
 
 <template>
@@ -38,6 +44,15 @@ const nav = computed(() => {
         <router-link v-for="n in nav" :key="n.to" :to="n.to">{{ n.label }}</router-link>
       </nav>
     </header>
+
+    <div v-if="pendingMigration" class="legacy-banner no-print">
+      老灯样「{{ pendingMigration.name }}」本次读入缺 {{ pendingMigration.items.length }} 项，已{{
+        pendingMigration.path === 'preset' ? `照预设「${pendingMigration.presetName}」` : '按写明的默认值兜底'
+      }}补齐（清单见首页）：参数预览、骨架件表、蒙面裁片、1:1 放样图与分页、备料与批量、三份导出单
+      现在全部按补齐后的同一份数据计算，改一处各处跟着刷新。
+      <b>仍拿补齐前老数的地方：本机存档（尚未确认写回）。</b>
+      <router-link to="/">去首页确认</router-link>
+    </div>
 
     <main class="app-main">
       <router-view v-slot="{ Component }">
@@ -196,6 +211,24 @@ a {
   max-width: 1560px;
   width: 100%;
   margin: 0 auto;
+}
+
+.legacy-banner {
+  background: #fdf3e2;
+  border-bottom: 1px solid #e8cfa4;
+  color: #8a4b12;
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 8px 22px;
+}
+
+.legacy-banner b {
+  color: #8f1c19;
+}
+
+.legacy-banner a {
+  margin-left: 8px;
+  font-weight: 600;
 }
 
 .app-footer {

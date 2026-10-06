@@ -24,10 +24,11 @@ export function downloadText(filename: string, content: string, mime = 'text/csv
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export function membersCsv(l: Lantern, members: FrameMember[]): string {
+export function membersCsv(l: Lantern, members: FrameMember[], note?: string): string {
   const rows: (string | number)[][] = [
     [`花灯构件清单 · ${l.name}`],
     [`最大直径 ${l.maxDiameterMm}mm / 总高 ${l.totalHeightMm}mm / 绑扎余量 每端 ${l.lashAllowanceMm}mm / 生成 ${new Date().toLocaleString()}`],
+    ...(note ? [['老档补齐说明', note]] : []),
     [],
     ['构件名称', '类别', '分组', '净长(mm)', '截取长度(mm,含余量)', '余量处数', '数量', '总截取长度(mm)', '弯曲半径(mm)', '折角(°)', '备注']
   ]
@@ -53,10 +54,11 @@ export function membersCsv(l: Lantern, members: FrameMember[]): string {
   return toCsv(rows)
 }
 
-export function panelsCsv(l: Lantern, panels: Panel[]): string {
+export function panelsCsv(l: Lantern, panels: Panel[], note?: string): string {
   const rows: (string | number)[][] = [
     [`蒙面裁片清单 · ${l.name}`],
     [`蒙面 ${coveringSpec(l.covering).name} / 缝份 每边 ${l.seamAllowanceMm}mm（已含在裁片尺寸内）/ 生成 ${new Date().toLocaleString()}`],
+    ...(note ? [['老档补齐说明', note]] : []),
     [],
     ['裁片编号', '名称', '形状', '净上宽(mm)', '净下宽(mm)', '净高(mm)', '裁切上宽(mm)', '裁切下宽(mm)', '裁切高(mm)', '半径/对边(mm)', '数量', '对位标记数']
   ]
@@ -82,12 +84,14 @@ export function panelsCsv(l: Lantern, panels: Panel[]): string {
 export function materialsCsv(
   l: Lantern,
   single: SingleLightMaterials,
-  batch: BatchMaterials
+  batch: BatchMaterials,
+  note?: string
 ): string {
   const cov = coveringSpec(l.covering)
   const rows: (string | number)[][] = [
     [`备料单 · ${l.name}`],
     [`生成 ${new Date().toLocaleString()} / 单位 mm·m²·m·g`],
+    ...(note ? [['老档补齐说明', note]] : []),
     [],
     ['项目', '单灯用量', '单位', `批量 ${batch.count} 个（含 ${(batch.wasteRatio * 100).toFixed(0)}% 损耗）`],
     ['竹篾/铁丝（含绑扎余量）', single.frameM.toFixed(3), 'm', batch.frameM.toFixed(3)],

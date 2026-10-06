@@ -38,6 +38,24 @@ export interface LanternPreset {
   params: PresetParams
 }
 
+/** 老灯样补齐用的写明默认值（lantern-types.json · craft.legacyDefaults） */
+export interface LegacyDefaults {
+  /** 兜底预设（核心尺寸缺省时取它的参数） */
+  fallbackPresetId: string
+  batchCount: number
+  pageSize: 'A4' | 'A3'
+  mouthStyle: 'flat' | 'taper' | 'gourd'
+  smoothness: number
+  ctrl1: { x: number; y: number }
+  ctrl2: { x: number; y: number }
+  /** 各灯型缺省棱数 / 母线根数 */
+  sides: Record<string, number>
+  /** 缺省层数（= 兜底预设层数） */
+  layerCount: number
+  /** 写明的默认规则说明（界面展示用） */
+  notes: string[]
+}
+
 export const CRAFT = raw.craft as {
   defaultLashAllowanceMm: number
   defaultSeamAllowanceMm: number
@@ -47,6 +65,7 @@ export const CRAFT = raw.craft as {
   divMax: number
   lashPerJointM: number
   led: { perLiter: number; min: number; rule: string }
+  legacyDefaults: LegacyDefaults
 }
 
 export const COVERINGS = raw.coverings as CoveringSpec[]

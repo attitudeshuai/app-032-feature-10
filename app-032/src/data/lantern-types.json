@@ -12,6 +12,25 @@
       "perLiter": 0.35,
       "min": 12,
       "rule": "按灯体体积 × 0.35 颗/升估算（最低 12 颗，暖白高亮 LED），仅作亮度建议，不做电气设计与控制"
+    },
+    "legacyDefaults": {
+      "fallbackPresetId": "hex-palace",
+      "batchCount": 20,
+      "pageSize": "A4",
+      "mouthStyle": "taper",
+      "smoothness": 0.45,
+      "ctrl1": { "x": 0.12, "y": 0.3 },
+      "ctrl2": { "x": 0.85, "y": 0.78 },
+      "sides": { "prism": 6, "box": 4, "revolution": 8, "polyhedron": 4 },
+      "layerCount": 4,
+      "notes": [
+        "底口直径缺省与上口同径（= 收口直径）；上口也缺时同最大直径（平口直柱）",
+        "下收口方式缺省与上收口同法（= mouthStyle）",
+        "逐层配色缺省逐层取主色；主色缺省取兜底预设主色",
+        "旋转体母线等分数缺省取 defaultDivisions（24）；等分近似展开的面积核对容差 [0.97, 1.03]（±3%），超差提示提高等分数",
+        "厘米 → 毫米 ×10 后按整数取整；长度 mm 保留 1 位小数；面积折 m² 保留 3 位小数；比例按百分数保留 2 位小数",
+        "灯样编号与创建时间保持原样；缺了只补一次，确认写回后固定，不再每次读入重新生成"
+      ]
     }
   },
   "coverings": [

@@ -3,11 +3,12 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PanelDiagram from '../components/PanelDiagram.vue'
 import ChecksPanel from '../components/ChecksPanel.vue'
-import { getLantern } from '../core/store'
+import { getLantern, migrationOf } from '../core/store'
 import { computeAll } from '../core/checks'
 import { DEFAULT_LOFT_OPTIONS } from '../core/paginate'
 import { bodySurfaceArea } from '../core/geometry'
 import { downloadText, panelsCsv, shapeName } from '../core/exporter'
+import { migrationSummary } from '../core/legacy'
 import { coveringSpec } from '../core/craft'
 
 const route = useRoute()
@@ -41,7 +42,8 @@ const palette = computed(() => {
 function exportCsv() {
   const l = lantern.value
   if (!l || !full.value) return
-  downloadText(`${l.name}-蒙面裁片清单.csv`, panelsCsv(l, full.value.panels.panels))
+  const m = migrationOf(l.id)
+  downloadText(`${l.name}-蒙面裁片清单.csv`, panelsCsv(l, full.value.panels.panels, m ? migrationSummary(m) : undefined))
 }
 </script>
 
